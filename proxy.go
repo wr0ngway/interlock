@@ -8,6 +8,8 @@ type (
 		BackendOptions []string
 		Upstreams      []*Upstream
 		SSLOnly        bool
+		Mode           string
+		PublicPort     int
 	}
 	Upstream struct {
 		Addr          string
