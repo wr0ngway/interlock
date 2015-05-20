@@ -46,7 +46,7 @@ func getTestApi() (*Api, error) {
 	return NewApi(cfg), nil
 }
 
-func TestApiGetRoot(t *testing.T) {
+func TestApiGetIndex(t *testing.T) {
 	api, err := getTestApi()
 	if err != nil {
 		t.Fatal(err)

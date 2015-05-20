@@ -19,8 +19,8 @@ func init() {
 
 type (
 	RegisteredPlugin struct {
-		New  func(config *interlock.Config, client *dockerclient.DockerClient) (interlock.Plugin, error)
-		Info func() *interlock.PluginInfo
+		New  func(config *interlock.Config, client *dockerclient.DockerClient) (interlock.Plugin, error) `json:"-"`
+		Info func() *interlock.PluginInfo                                                                `json:"info,omitempty"`
 	}
 )
 
