@@ -1,4 +1,4 @@
-package main
+package manager
 
 import (
 	"fmt"
@@ -10,11 +10,11 @@ import (
 
 type (
 	EventHandler struct {
-		Manager *Manager
+		Manager Manager
 	}
 )
 
-func NewEventHandler(mgr *Manager) *EventHandler {
+func NewEventHandler(mgr Manager) *EventHandler {
 	return &EventHandler{
 		Manager: mgr,
 	}
@@ -24,5 +24,5 @@ func (l *EventHandler) Handle(e *dockerclient.Event, ec chan error, args ...inte
 	plugins.Log("interlock", log.DebugLevel,
 		fmt.Sprintf("event: date=%d type=%s image=%s container=%s", e.Time, e.Status, e.From, e.Id))
 
-	go plugins.DispatchEvent(l.Manager.Config, l.Manager.Client, e, ec)
+	go plugins.DispatchEvent(l.Manager.Config(), l.Manager.Client(), e, ec)
 }

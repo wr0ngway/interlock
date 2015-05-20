@@ -1,4 +1,4 @@
-package main
+package manager
 
 import (
 	"crypto/tls"
@@ -19,40 +19,50 @@ var (
 )
 
 type (
-	Manager struct {
-		Config    *interlock.Config
-		Client    *dockerclient.DockerClient
+	Mgr struct {
+		config    *interlock.Config
+		client    *dockerclient.DockerClient
 		mux       sync.Mutex
 		tlsConfig *tls.Config
 		proxyCmd  *exec.Cmd
 	}
 )
 
-func NewManager(cfg *interlock.Config, tlsConfig *tls.Config) *Manager {
-	m := &Manager{
-		Config:    cfg,
+func NewManager(cfg *interlock.Config, tlsConfig *tls.Config) *Mgr {
+	m := &Mgr{
+		config:    cfg,
 		tlsConfig: tlsConfig,
 	}
 
 	return m
 }
 
-func (m *Manager) connect() error {
-	log.Debugf("connecting to swarm on %s", m.Config.SwarmUrl)
-	c, err := dockerclient.NewDockerClient(m.Config.SwarmUrl, m.tlsConfig)
+func (m *Mgr) connect() error {
+	log.Debugf("connecting to swarm on %s", m.config.SwarmUrl)
+	c, err := dockerclient.NewDockerClient(m.config.SwarmUrl, m.tlsConfig)
 	if err != nil {
 		log.Warn(err)
 		return err
 	}
-	m.Client = c
+
+	m.client = c
 	go m.startEventListener()
 	go m.reconnectOnFail()
+
 	return nil
 }
 
-func (m *Manager) startEventListener() {
+func (m *Mgr) Config() *interlock.Config {
+	return m.config
+}
+
+func (m *Mgr) Client() *dockerclient.DockerClient {
+	return m.client
+}
+
+func (m *Mgr) startEventListener() {
 	evt := NewEventHandler(m)
-	m.Client.StartMonitorEvents(evt.Handle, eventsErrChan)
+	m.client.StartMonitorEvents(evt.Handle, eventsErrChan)
 }
 
 func waitForTCP(addr string) error {
@@ -68,11 +78,11 @@ func waitForTCP(addr string) error {
 	return nil
 }
 
-func (m *Manager) reconnectOnFail() {
+func (m *Mgr) reconnectOnFail() {
 	<-eventsErrChan
 	for {
 		log.Warnf("error receiving events; attempting to reconnect")
-		u, err := url.Parse(m.Config.SwarmUrl)
+		u, err := url.Parse(m.config.SwarmUrl)
 		if err != nil {
 			log.Warnf("unable to parse Swarm URL: %s", err)
 			continue
@@ -91,7 +101,28 @@ func (m *Manager) reconnectOnFail() {
 	}
 }
 
-func (m *Manager) Run() error {
+func (m *Mgr) Plugins() map[string]*plugins.RegisteredPlugin {
+	// plugins
+	allPlugins := plugins.GetPlugins()
+	if len(allPlugins) == 0 || len(m.config.EnabledPlugins) == 0 {
+		log.Warnf("no plugins enabled")
+	}
+
+	enabledPlugins := make(map[string]*plugins.RegisteredPlugin)
+
+	for _, v := range m.config.EnabledPlugins {
+		if p, ok := allPlugins[v]; ok {
+			log.Infof("loading plugin name=%s version=%s",
+				p.Info().Name,
+				p.Info().Version)
+			enabledPlugins[v] = p
+		}
+	}
+
+	return enabledPlugins
+}
+
+func (m *Mgr) Run() error {
 	if err := m.connect(); err != nil {
 		return err
 	}
@@ -103,23 +134,7 @@ func (m *Manager) Run() error {
 		}
 	}()
 
-	// plugins
-	allPlugins := plugins.GetPlugins()
-	if len(allPlugins) == 0 || len(m.Config.EnabledPlugins) == 0 {
-		log.Warnf("no plugins enabled")
-	}
-
-	enabledPlugins := make(map[string]*plugins.RegisteredPlugin)
-
-	for _, v := range m.Config.EnabledPlugins {
-		if p, ok := allPlugins[v]; ok {
-			log.Infof("loading plugin name=%s version=%s",
-				p.Info().Name,
-				p.Info().Version)
-			enabledPlugins[v] = p
-		}
-	}
-
+	enabledPlugins := m.Plugins()
 	plugins.SetEnabledPlugins(enabledPlugins)
 
 	// custom event to signal startup
@@ -129,11 +144,12 @@ func (m *Manager) Run() error {
 		From:   "interlock",
 		Time:   time.Now().UnixNano(),
 	}
-	plugins.DispatchEvent(m.Config, m.Client, evt, eventsErrChan)
+	plugins.DispatchEvent(m.config, m.client, evt, eventsErrChan)
+
 	return nil
 }
 
-func (m *Manager) Stop() error {
+func (m *Mgr) Stop() error {
 	// custom event to signal shutdown
 	evt := &dockerclient.Event{
 		Id:     "",
@@ -141,6 +157,6 @@ func (m *Manager) Stop() error {
 		From:   "interlock",
 		Time:   time.Now().UnixNano(),
 	}
-	plugins.DispatchEvent(m.Config, m.Client, evt, eventsErrChan)
+	plugins.DispatchEvent(m.config, m.client, evt, eventsErrChan)
 	return nil
 }

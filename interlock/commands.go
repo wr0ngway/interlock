@@ -13,6 +13,7 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/codegangsta/cli"
 	"github.com/ehazlett/interlock"
+	"github.com/ehazlett/interlock/manager"
 	"github.com/ehazlett/interlock/plugins"
 	"github.com/ehazlett/interlock/version"
 )
@@ -78,7 +79,7 @@ func cmdStart(c *cli.Context) {
 		tlsConfig = cfg
 	}
 
-	m := NewManager(config, tlsConfig)
+	m := manager.NewManager(config, tlsConfig)
 
 	log.Infof("interlock running version=%s", version.FULL_VERSION)
 	if err := m.Run(); err != nil {
