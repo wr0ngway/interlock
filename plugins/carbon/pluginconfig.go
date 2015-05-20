@@ -1,4 +1,4 @@
-package stats
+package carbon
 
 import (
 	"regexp"
