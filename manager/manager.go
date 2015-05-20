@@ -16,6 +16,7 @@ import (
 
 var (
 	eventsErrChan = make(chan error)
+	recovering    = false
 )
 
 type (
@@ -39,6 +40,7 @@ func NewManager(cfg *interlock.Config, tlsConfig *tls.Config) *Mgr {
 
 func (m *Mgr) connect() error {
 	log.Debugf("connecting to swarm on %s", m.config.SwarmUrl)
+
 	c, err := dockerclient.NewDockerClient(m.config.SwarmUrl, m.tlsConfig)
 	if err != nil {
 		log.Warn(err)
@@ -46,8 +48,8 @@ func (m *Mgr) connect() error {
 	}
 
 	m.client = c
+
 	go m.startEventListener()
-	go m.reconnectOnFail()
 
 	return nil
 }
@@ -79,25 +81,39 @@ func waitForTCP(addr string) error {
 }
 
 func (m *Mgr) reconnectOnFail() {
-	<-eventsErrChan
 	for {
-		log.Warnf("error receiving events; attempting to reconnect")
-		u, err := url.Parse(m.config.SwarmUrl)
-		if err != nil {
-			log.Warnf("unable to parse Swarm URL: %s", err)
-			continue
-		}
+		err := <-eventsErrChan
+		log.Debugf("error on events chan: err=%s", err)
 
-		if err := waitForTCP(u.Host); err != nil {
-			log.Warnf("error connecting to Swarm: %s", err)
-			continue
-		}
+		if !recovering {
+			recovering = true
 
-		if err := m.connect(); err == nil {
-			log.Debugf("re-connected to Swarm: %s", u.Host)
-			break
+			for {
+
+				log.Warnf("error receiving events; attempting to reconnect")
+
+				time.Sleep(1 * time.Second)
+
+				u, err := url.Parse(m.config.SwarmUrl)
+				if err != nil {
+					log.Warnf("unable to parse Swarm URL: %s", err)
+					continue
+				}
+
+				if u.Scheme != "unix" {
+					if err := waitForTCP(u.Host); err != nil {
+						log.Warnf("error connecting to Swarm: %s", err)
+						continue
+					}
+				}
+
+				if err := m.connect(); err == nil {
+					log.Debugf("re-connected to Swarm: %s", m.config.SwarmUrl)
+					recovering = false
+					break
+				}
+			}
 		}
-		time.Sleep(1 * time.Second)
 	}
 }
 
@@ -127,12 +143,7 @@ func (m *Mgr) Run() error {
 		return err
 	}
 
-	go func() {
-		for {
-			err := <-eventsErrChan
-			log.Error(err)
-		}
-	}()
+	go m.reconnectOnFail()
 
 	enabledPlugins := m.Plugins()
 	plugins.SetEnabledPlugins(enabledPlugins)

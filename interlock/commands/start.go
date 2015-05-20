@@ -1,29 +1,35 @@
-package main
+package commands
 
 import (
 	"crypto/tls"
-	"fmt"
 	"io/ioutil"
 	"os"
-	"os/signal"
 	"path/filepath"
-	"syscall"
-	"text/tabwriter"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/codegangsta/cli"
 	"github.com/ehazlett/interlock"
+	"github.com/ehazlett/interlock/api"
 	"github.com/ehazlett/interlock/manager"
-	"github.com/ehazlett/interlock/plugins"
+	"github.com/ehazlett/interlock/utils"
 	"github.com/ehazlett/interlock/version"
 )
 
-func waitForInterrupt() {
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM, syscall.SIGQUIT)
-	for _ = range sigChan {
-		return
-	}
+var CmdStart = cli.Command{
+	Name:   "start",
+	Usage:  "Start Interlock",
+	Action: cmdStart,
+	Flags: []cli.Flag{
+		cli.BoolFlag{
+			Name:  "api",
+			Usage: "Enable API",
+		},
+		cli.StringFlag{
+			Name:  "api-listen-addr",
+			Usage: "API listen address",
+			Value: ":8080",
+		},
+	},
 }
 
 func cmdStart(c *cli.Context) {
@@ -72,7 +78,7 @@ func cmdStart(c *cli.Context) {
 			log.Fatalf("error loading tls key: %s", err)
 		}
 
-		cfg, err := getTLSConfig(caCert, cert, key, allowInsecureTls)
+		cfg, err := utils.GetTLSConfig(caCert, cert, key, allowInsecureTls)
 		if err != nil {
 			log.Fatalf("error configuring tls: %s", err)
 		}
@@ -86,28 +92,31 @@ func cmdStart(c *cli.Context) {
 		log.Fatal(err)
 	}
 
+	go func() {
+		err := <-errChan
+		log.Error(err)
+	}()
+
+	if c.Bool("api") {
+		listenAddr := c.String("api-listen-addr")
+		log.Debugf("enabling api: addr=%s", listenAddr)
+		cfg := &api.ApiConfig{
+			ListenAddr: listenAddr,
+			Manager:    m,
+		}
+
+		a := api.NewApi(cfg)
+		go func() {
+			if err := a.Run(); err != nil {
+				errChan <- err
+			}
+		}()
+	}
+
 	waitForInterrupt()
 
 	log.Infof("shutting down")
 	if err := m.Stop(); err != nil {
 		log.Fatal(err)
 	}
-}
-
-func cmdListPlugins(c *cli.Context) {
-	allPlugins := plugins.GetPlugins()
-	w := tabwriter.NewWriter(os.Stdout, 8, 1, 3, ' ', 0)
-
-	fmt.Fprintln(w, "NAME\tVERSION\tDESCRIPTION\tURL")
-
-	for _, p := range allPlugins {
-		i := p.Info()
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
-			i.Name,
-			i.Version,
-			i.Description,
-			i.Url,
-		)
-	}
-	w.Flush()
 }

@@ -223,7 +223,13 @@ func (p NginxPlugin) HandleEvent(event *dockerclient.Event) error {
 	)
 
 	switch event.Status {
-	case "start", "interlock-start":
+	case "interlock-start":
+		time.Sleep(250 * time.Millisecond)
+		jobs = jobs + 1
+		if err := p.handleUpdate(event); err != nil {
+			return err
+		}
+	case "start":
 		jobs = jobs + 1
 		if err := p.handleUpdate(event); err != nil {
 			return err
