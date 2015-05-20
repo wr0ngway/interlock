@@ -1,4 +1,4 @@
-package stats
+package carbon
 
 import (
 	"fmt"
@@ -23,7 +23,7 @@ var (
 	errorChan = make(chan error)
 )
 
-type StatsPlugin struct {
+type CarbonPlugin struct {
 	interlockConfig *interlock.Config
 	pluginConfig    *PluginConfig
 	client          *dockerclient.DockerClient
@@ -51,17 +51,17 @@ func loadPluginConfig() (*PluginConfig, error) {
 	}
 
 	// load custom config via environment
-	carbonAddress := os.Getenv("STATS_CARBON_ADDRESS")
+	carbonAddress := os.Getenv("CARBON_ADDRESS")
 	if carbonAddress != "" {
 		cfg.CarbonAddress = carbonAddress
 	}
 
-	statsPrefix := os.Getenv("STATS_PREFIX")
+	statsPrefix := os.Getenv("CARBON_PREFIX")
 	if statsPrefix != "" {
 		cfg.StatsPrefix = statsPrefix
 	}
 
-	imageNameFilter := os.Getenv("STATS_IMAGE_NAME_FILTER")
+	imageNameFilter := os.Getenv("CARBON_IMAGE_NAME_FILTER")
 	if imageNameFilter != "" {
 		// validate regex
 		r, err := regexp.Compile(imageNameFilter)
@@ -71,7 +71,7 @@ func loadPluginConfig() (*PluginConfig, error) {
 		cfg.ImageNameFilter = r
 	}
 
-	interval := os.Getenv("STATS_INTERVAL")
+	interval := os.Getenv("CARBON_INTERVAL")
 	if interval != "" {
 		i, err := strconv.Atoi(interval)
 		if err != nil {
@@ -84,7 +84,7 @@ func loadPluginConfig() (*PluginConfig, error) {
 }
 
 func NewPlugin(interlockConfig *interlock.Config, client *dockerclient.DockerClient) (interlock.Plugin, error) {
-	p := StatsPlugin{interlockConfig: interlockConfig, client: client}
+	p := CarbonPlugin{interlockConfig: interlockConfig, client: client}
 	cfg, err := loadPluginConfig()
 	if err != nil {
 		return nil, err
@@ -105,7 +105,7 @@ func NewPlugin(interlockConfig *interlock.Config, client *dockerclient.DockerCli
 	return p, nil
 }
 
-func (p StatsPlugin) initialize() error {
+func (p CarbonPlugin) initialize() error {
 	containers, err := p.client.ListContainers(false, false, "")
 	if err != nil {
 		return err
@@ -122,19 +122,19 @@ func (p StatsPlugin) initialize() error {
 	return nil
 }
 
-func (p StatsPlugin) Init() error {
+func (p CarbonPlugin) Init() error {
 	return nil
 }
 
-func (p StatsPlugin) handleStats(id string, cb dockerclient.StatCallback, ec chan error, args ...interface{}) {
+func (p CarbonPlugin) handleStats(id string, cb dockerclient.StatCallback, ec chan error, args ...interface{}) {
 	go p.client.StartMonitorStats(id, cb, ec, args)
 }
 
-func (p StatsPlugin) Info() *interlock.PluginInfo {
+func (p CarbonPlugin) Info() *interlock.PluginInfo {
 	return pluginInfo
 }
 
-func (p StatsPlugin) sendStat(path string, value interface{}, t *time.Time) error {
+func (p CarbonPlugin) sendStat(path string, value interface{}, t *time.Time) error {
 	conn, err := net.Dial("tcp", p.pluginConfig.CarbonAddress)
 	if err != nil {
 		return err
@@ -151,7 +151,7 @@ func (p StatsPlugin) sendStat(path string, value interface{}, t *time.Time) erro
 	return nil
 }
 
-func (p StatsPlugin) sendEventStats(id string, stats *dockerclient.Stats, ec chan error, args ...interface{}) {
+func (p CarbonPlugin) sendEventStats(id string, stats *dockerclient.Stats, ec chan error, args ...interface{}) {
 	timestamp := time.Now()
 	// report every n seconds
 	rem := math.Mod(float64(timestamp.Second()), float64(p.pluginConfig.Interval))
@@ -269,7 +269,7 @@ func (p StatsPlugin) sendEventStats(id string, stats *dockerclient.Stats, ec cha
 	return
 }
 
-func (p StatsPlugin) startStats(id string) error {
+func (p CarbonPlugin) startStats(id string) error {
 	// get container info for event
 	c, err := p.client.InspectContainer(id)
 	if err != nil {
@@ -285,7 +285,7 @@ func (p StatsPlugin) startStats(id string) error {
 	return nil
 }
 
-func (p StatsPlugin) HandleEvent(event *dockerclient.Event) error {
+func (p CarbonPlugin) HandleEvent(event *dockerclient.Event) error {
 	// check all containers to see if stats are needed
 	if err := p.initialize(); err != nil {
 		return err
