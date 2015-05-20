@@ -1,14 +1,14 @@
-package stats
+package carbon
 
 import (
 	"github.com/ehazlett/interlock"
 )
 
 const (
-	pluginName        = "stats"
+	pluginName        = "carbon"
 	pluginVersion     = "0.1"
-	pluginDescription = "cluster stats to graphite"
-	pluginUrl         = "https://github.com/ehazlett/interlock/tree/master/plugins/stats"
+	pluginDescription = "cluster stats to carbon (graphite)"
+	pluginUrl         = "https://github.com/ehazlett/interlock/tree/master/plugins/carbon"
 )
 
 var (
