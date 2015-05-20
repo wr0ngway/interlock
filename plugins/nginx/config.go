@@ -1,6 +1,6 @@
 package nginx
 
 type NginxConfig struct {
-	PluginConfig
-	Hosts []*Host
+	PluginConfig `json:"plugin_config,omitempty"`
+	Hosts        []*Host `json:"hosts,omitempty"`
 }

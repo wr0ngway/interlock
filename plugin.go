@@ -5,10 +5,10 @@ import (
 )
 
 type PluginInfo struct {
-	Name        string
-	Version     string
-	Description string
-	Url         string
+	Name        string `json:"name,omitempty"`
+	Version     string `json:"version,omitempty"`
+	Description string `json:"description,omitempty"`
+	Url         string `json:"url,omitempty"`
 }
 
 type Plugin interface {
