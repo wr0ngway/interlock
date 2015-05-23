@@ -12,10 +12,19 @@ const (
 )
 
 var (
+	pluginActions = []*interlock.PluginAction{
+		{
+			Name:       "reload",
+			EventName:  "nginx-reload",
+			Parameters: nil,
+		},
+	}
+
 	pluginInfo = &interlock.PluginInfo{
 		Name:        pluginName,
 		Version:     pluginVersion,
 		Description: pluginDescription,
 		Url:         pluginUrl,
+		Actions:     pluginActions,
 	}
 )
