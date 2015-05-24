@@ -241,6 +241,10 @@ func (p NginxPlugin) HandleEvent(event *dockerclient.Event) error {
 		if err := p.handleUpdate(event); err != nil {
 			return err
 		}
+	case "nginx-reload":
+		if err := p.reload(); err != nil {
+			return err
+		}
 	case "interlock-stop":
 		// stop haproxy
 		if proxyCmd != nil {
