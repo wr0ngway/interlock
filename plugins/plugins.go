@@ -24,7 +24,7 @@ type (
 	}
 )
 
-func DispatchEvent(config *interlock.Config, client *dockerclient.DockerClient, event *dockerclient.Event, errorChan chan error) {
+func DispatchEvent(config *interlock.Config, client *dockerclient.DockerClient, event *interlock.InterlockEvent, errorChan chan error) {
 	enabledPlugins := make(map[string]bool)
 	for _, v := range config.EnabledPlugins {
 		enabledPlugins[v] = true

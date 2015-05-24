@@ -1,9 +1,5 @@
 package interlock
 
-import (
-	"github.com/samalba/dockerclient"
-)
-
 type PluginAction struct {
 	Name       string   `json:"name,omitempty"`
 	EventName  string   `json:"event_name,omitempty"`
@@ -21,5 +17,5 @@ type PluginInfo struct {
 type Plugin interface {
 	Info() *PluginInfo
 	Init() error
-	HandleEvent(event *dockerclient.Event) error
+	HandleEvent(event *InterlockEvent) error
 }
