@@ -34,6 +34,10 @@ func (m MockManager) Client() *dockerclient.DockerClient {
 	return nil
 }
 
+func (m MockManager) Signal(action string, params map[string]string) error {
+	return nil
+}
+
 func getTestApi() (*Api, error) {
 	log.SetLevel(log.ErrorLevel)
 	m := &MockManager{}

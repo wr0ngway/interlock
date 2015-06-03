@@ -6,4 +6,5 @@ import (
 
 type InterlockEvent struct {
 	*dockerclient.Event
+	Parameters map[string]string
 }

@@ -33,11 +33,13 @@ func (p ExamplePlugin) Info() *interlock.PluginInfo {
 	return pluginInfo
 }
 
-func (p ExamplePlugin) HandleEvent(event *dockerclient.Event) error {
+func (p ExamplePlugin) HandleEvent(event *interlock.InterlockEvent) error {
 	plugins.Log(pluginInfo.Name, log.InfoLevel,
-		fmt.Sprintf("action=received event=%s time=%d",
+		fmt.Sprintf("action=received cid=%q event=%s time=%d params=%q",
 			event.Id,
+			event.Status,
 			event.Time,
+			event.Parameters,
 		),
 	)
 	return nil
