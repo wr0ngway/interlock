@@ -214,7 +214,7 @@ func (p NginxPlugin) Info() *interlock.PluginInfo {
 	return pluginInfo
 }
 
-func (p NginxPlugin) HandleEvent(event *dockerclient.Event) error {
+func (p NginxPlugin) HandleEvent(event *interlock.InterlockEvent) error {
 	logMessage(log.InfoLevel,
 		fmt.Sprintf("action=received event=%s time=%d",
 			event.Id,
@@ -263,7 +263,7 @@ func (p NginxPlugin) HandleEvent(event *dockerclient.Event) error {
 	return nil
 }
 
-func (p NginxPlugin) handleUpdate(event *dockerclient.Event) error {
+func (p NginxPlugin) handleUpdate(event *interlock.InterlockEvent) error {
 	defer p.handleReload(event)
 
 	return nil
@@ -273,7 +273,7 @@ func (p NginxPlugin) Init() error {
 	return nil
 }
 
-func (p NginxPlugin) handleReload(event *dockerclient.Event) error {
+func (p NginxPlugin) handleReload(event *interlock.InterlockEvent) error {
 	jobs -= 1
 
 	logMessage(log.DebugLevel, fmt.Sprintf("jobs: %d", jobs))
@@ -478,7 +478,7 @@ func (p NginxPlugin) generateNginxConfig() (*NginxConfig, error) {
 	}, nil
 }
 
-func (p NginxPlugin) updateConfig(e *dockerclient.Event) error {
+func (p NginxPlugin) updateConfig(e *interlock.InterlockEvent) error {
 	cfg, err := p.generateNginxConfig()
 	if err != nil {
 		return err

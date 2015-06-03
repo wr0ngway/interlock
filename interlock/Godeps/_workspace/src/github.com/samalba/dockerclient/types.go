@@ -1,6 +1,11 @@
 package dockerclient
 
-import "time"
+import (
+	"fmt"
+	"time"
+
+	"github.com/docker/docker/pkg/units"
+)
 
 type ContainerConfig struct {
 	Hostname        string
@@ -15,12 +20,14 @@ type ContainerConfig struct {
 	AttachStderr    bool
 	PortSpecs       []string
 	ExposedPorts    map[string]struct{}
+	MacAddress      string
 	Tty             bool
 	OpenStdin       bool
 	StdinOnce       bool
 	Env             []string
 	Cmd             []string
 	Image           string
+	Labels          map[string]string
 	Volumes         map[string]struct{}
 	WorkingDir      string
 	Entrypoint      []string
@@ -35,6 +42,10 @@ type HostConfig struct {
 	Binds           []string
 	ContainerIDFile string
 	LxcConf         []map[string]string
+	Memory          int64
+	MemorySwap      int64
+	CpuShares       int64
+	CpusetCpus      string
 	Privileged      bool
 	PortBindings    map[string][]PortBinding
 	Links           []string
@@ -42,8 +53,11 @@ type HostConfig struct {
 	Dns             []string
 	DnsSearch       []string
 	VolumesFrom     []string
+	SecurityOpt     []string
 	NetworkMode     string
 	RestartPolicy   RestartPolicy
+	Ulimits         []Ulimit
+	LogConfig       LogConfig
 }
 
 type ExecConfig struct {
@@ -64,6 +78,18 @@ type LogOptions struct {
 	Tail       int64
 }
 
+type MonitorEventsFilters struct {
+	Event     string `json:",omitempty"`
+	Image     string `json:",omitempty"`
+	Container string `json:",omitempty"`
+}
+
+type MonitorEventsOptions struct {
+	Since   int
+	Until   int
+	Filters *MonitorEventsFilters `json:",omitempty"`
+}
+
 type RestartPolicy struct {
 	Name              string
 	MaximumRetryCount int64
@@ -74,37 +100,94 @@ type PortBinding struct {
 	HostPort string
 }
 
+type State struct {
+	Running    bool
+	Paused     bool
+	Restarting bool
+	OOMKilled  bool
+	Dead       bool
+	Pid        int
+	ExitCode   int
+	Error      string // contains last known error when starting the container
+	StartedAt  time.Time
+	FinishedAt time.Time
+	Ghost      bool
+}
+
+// String returns a human-readable description of the state
+// Stoken from docker/docker/daemon/state.go
+func (s *State) String() string {
+	if s.Running {
+		if s.Paused {
+			return fmt.Sprintf("Up %s (Paused)", units.HumanDuration(time.Now().UTC().Sub(s.StartedAt)))
+		}
+		if s.Restarting {
+			return fmt.Sprintf("Restarting (%d) %s ago", s.ExitCode, units.HumanDuration(time.Now().UTC().Sub(s.FinishedAt)))
+		}
+
+		return fmt.Sprintf("Up %s", units.HumanDuration(time.Now().UTC().Sub(s.StartedAt)))
+	}
+
+	if s.Dead {
+		return "Dead"
+	}
+
+	if s.FinishedAt.IsZero() {
+		return ""
+	}
+
+	return fmt.Sprintf("Exited (%d) %s ago", s.ExitCode, units.HumanDuration(time.Now().UTC().Sub(s.FinishedAt)))
+}
+
+// StateString returns a single string to describe state
+// Stoken from docker/docker/daemon/state.go
+func (s *State) StateString() string {
+	if s.Running {
+		if s.Paused {
+			return "paused"
+		}
+		if s.Restarting {
+			return "restarting"
+		}
+		return "running"
+	}
+
+	if s.Dead {
+		return "dead"
+	}
+
+	return "exited"
+}
+
+type ImageInfo struct {
+	Architecture    string
+	Author          string
+	Comment         string
+	Config          *ContainerConfig
+	Container       string
+	ContainerConfig *ContainerConfig
+	Created         time.Time
+	DockerVersion   string
+	Id              string
+	Os              string
+	Parent          string
+	Size            int64
+	VirtualSize     int64
+}
+
 type ContainerInfo struct {
-	Id      string
-	Created string
-	Path    string
-	Name    string
-	Args    []string
-	ExecIDs []string
-	Config  *ContainerConfig
-	State   struct {
-		Running    bool
-		Paused     bool
-		Restarting bool
-		Pid        int
-		ExitCode   int
-		StartedAt  time.Time
-		FinishedAt time.Time
-		Ghost      bool
-	}
-	Image string
-	Node  struct {
-		ID     string
-		IP     string
-		Addr   string
-		Name   string
-		Cpus   int
-		Memory int
-		Labels map[string]string
-	}
+	Id              string
+	Created         string
+	Path            string
+	Name            string
+	Args            []string
+	ExecIDs         []string
+	Config          *ContainerConfig
+	State           *State
+	Image           string
 	NetworkSettings struct {
-		IpAddress   string
-		IpPrefixLen int
+		IPAddress   string `json:"IpAddress"`
+		IPPrefixLen int    `json:"IpPrefixLen"`
 		Gateway     string
 		Bridge      string
 		Ports       map[string][]PortBinding
@@ -113,6 +196,11 @@ type ContainerInfo struct {
 	ResolvConfPath string
 	Volumes        map[string]string
 	HostConfig     *HostConfig
+}
+
+type ContainerChanges struct {
+	Path string
+	Kind int
 }
 
 type Port struct {
@@ -132,6 +220,7 @@ type Container struct {
 	Ports      []Port
 	SizeRw     int64
 	SizeRootFs int64
+	Labels     map[string]string
 }
 
 type Event struct {
@@ -142,9 +231,13 @@ type Event struct {
 }
 
 type Version struct {
-	Version   string
-	GitCommit string
-	GoVersion string
+	ApiVersion    string
+	Arch          string
+	GitCommit     string
+	GoVersion     string
+	KernelVersion string
+	Os            string
+	Version       string
 }
 
 type RespContainersCreate struct {
@@ -161,19 +254,53 @@ type Image struct {
 	VirtualSize int64
 }
 
+// Info is the struct returned by /info
+// The API is currently in flux, so Debug, MemoryLimit, SwapLimit, and
+// IPv4Forwarding are interfaces because in docker 1.6.1 they are 0 or 1 but in
+// master they are bools.
 type Info struct {
-	ID              string
-	Containers      int64
-	Driver          string
-	DriverStatus    [][]string
-	ExecutionDriver string
-	Images          int64
-	KernelVersion   string
-	OperatingSystem string
-	NCPU            int64
-	MemTotal        int64
-	Name            string
-	Labels          []string
+	ID                 string
+	Containers         int64
+	Driver             string
+	DriverStatus       [][]string
+	ExecutionDriver    string
+	Images             int64
+	KernelVersion      string
+	OperatingSystem    string
+	NCPU               int64
+	MemTotal           int64
+	Name               string
+	Labels             []string
+	Debug              interface{}
+	NFd                int64
+	NGoroutines        int64
+	SystemTime         time.Time
+	NEventsListener    int64
+	InitPath           string
+	InitSha1           string
+	IndexServerAddress string
+	MemoryLimit        interface{}
+	SwapLimit          interface{}
+	IPv4Forwarding     interface{}
+	DockerRootDir      string
+	HttpProxy          string
+	HttpsProxy         string
+	NoProxy            string
+}
+
+type ImageDelete struct {
+	Deleted  string
+	Untagged string
+}
+
+type EventOrError struct {
+	Event
+	Error error
+}
+
+type decodingResult struct {
+	result interface{}
+	err    error
 }
 
 // The following are types for the API stats endpoint
@@ -186,7 +313,6 @@ type ThrottlingData struct {
 	ThrottledTime uint64 `json:"throttled_time"`
 }
 
-// All CPU stats are aggregated since container inception.
 type CpuUsage struct {
 	// Total CPU time consumed.
 	// Units: nanoseconds.
@@ -208,17 +334,23 @@ type CpuStats struct {
 	ThrottlingData ThrottlingData `json:"throttling_data,omitempty"`
 }
 
+type NetworkStats struct {
+	RxBytes   uint64 `json:"rx_bytes"`
+	RxPackets uint64 `json:"rx_packets"`
+	RxErrors  uint64 `json:"rx_errors"`
+	RxDropped uint64 `json:"rx_dropped"`
+	TxBytes   uint64 `json:"tx_bytes"`
+	TxPackets uint64 `json:"tx_packets"`
+	TxErrors  uint64 `json:"tx_errors"`
+	TxDropped uint64 `json:"tx_dropped"`
+}
+
 type MemoryStats struct {
-	// current res_counter usage for memory
-	Usage uint64 `json:"usage"`
-	// maximum usage ever recorded.
-	MaxUsage uint64 `json:"max_usage"`
-	// TODO(vishh): Export these as stronger types.
-	// all the stats exported via memory.stat.
-	Stats map[string]uint64 `json:"stats"`
-	// number of times memory usage hits limits.
-	Failcnt uint64 `json:"failcnt"`
-	Limit   uint64 `json:"limit"`
+	Usage    uint64            `json:"usage"`
+	MaxUsage uint64            `json:"max_usage"`
+	Stats    map[string]uint64 `json:"stats"`
+	Failcnt  uint64            `json:"failcnt"`
+	Limit    uint64            `json:"limit"`
 }
 
 type BlkioStatEntry struct {
@@ -240,21 +372,21 @@ type BlkioStats struct {
 	SectorsRecursive        []BlkioStatEntry `json:"sectors_recursive"`
 }
 
-type Network struct {
-	RxBytes   uint64 `json:"rx_bytes"`
-	RxPackets uint64 `json:"rx_packets"`
-	RxErrors  uint64 `json:"rx_errors"`
-	RxDropped uint64 `json:"rx_dropped"`
-	TxBytes   uint64 `json:"tx_bytes"`
-	TxPackets uint64 `json:"tx_packets"`
-	TxErrors  uint64 `json:"tx_errors"`
-	TxDropped uint64 `json:"tx_dropped"`
+type Stats struct {
+	Read         time.Time    `json:"read"`
+	NetworkStats NetworkStats `json:"network,omitempty"`
+	CpuStats     CpuStats     `json:"cpu_stats,omitempty"`
+	MemoryStats  MemoryStats  `json:"memory_stats,omitempty"`
+	BlkioStats   BlkioStats   `json:"blkio_stats,omitempty"`
 }
 
-type Stats struct {
-	Read        time.Time   `json:"read"`
-	Network     Network     `json:"network,omitempty"`
-	CpuStats    CpuStats    `json:"cpu_stats,omitempty"`
-	MemoryStats MemoryStats `json:"memory_stats,omitempty"`
-	BlkioStats  BlkioStats  `json:"blkio_stats,omitempty"`
+type Ulimit struct {
+	Name string `json:"name"`
+	Soft uint64 `json:"soft"`
+	Hard uint64 `json:"hard"`
+}
+
+type LogConfig struct {
+	Type   string            `json:"type"`
+	Config map[string]string `json:"config"`
 }

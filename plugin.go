@@ -1,9 +1,9 @@
 package interlock
 
 type PluginAction struct {
-	Name       string   `json:"name,omitempty"`
-	EventName  string   `json:"event_name,omitempty"`
-	Parameters []string `json:"parameters,omitempty"`
+	Name       string            `json:"name,omitempty"`
+	EventName  string            `json:"event_name,omitempty"`
+	Parameters map[string]string `json:"parameters,omitempty"`
 }
 
 type PluginInfo struct {

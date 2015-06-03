@@ -10,10 +10,10 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/docker/docker/pkg/ioutils"
 	"github.com/docker/docker/pkg/jsonlog"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/docker/docker/pkg/timeutils"
-	"github.com/docker/docker/utils"
 	"github.com/gorilla/mux"
 )
 
@@ -27,8 +27,10 @@ func init() {
 	r.HandleFunc(baseURL+"/info", handlerGetInfo).Methods("GET")
 	r.HandleFunc(baseURL+"/containers/json", handlerGetContainers).Methods("GET")
 	r.HandleFunc(baseURL+"/containers/{id}/logs", handleContainerLogs).Methods("GET")
+	r.HandleFunc(baseURL+"/containers/{id}/changes", handleContainerChanges).Methods("GET")
 	r.HandleFunc(baseURL+"/containers/{id}/kill", handleContainerKill).Methods("POST")
 	r.HandleFunc(baseURL+"/images/create", handleImagePull).Methods("POST")
+	r.HandleFunc(baseURL+"/events", handleEvents).Methods("GET")
 	testHTTPServer = httptest.NewServer(handlerAccessLog(r))
 }
 
@@ -73,7 +75,7 @@ func handleImagePull(w http.ResponseWriter, r *http.Request) {
 
 func handleContainerLogs(w http.ResponseWriter, r *http.Request) {
 	var outStream, errStream io.Writer
-	outStream = utils.NewWriteFlusher(w)
+	outStream = ioutils.NewWriteFlusher(w)
 
 	// not sure how to test follow
 	if err := r.ParseForm(); err != nil {
@@ -105,6 +107,25 @@ func handleContainerLogs(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintln(outStream, line)
 		}
 	}
+}
+
+func handleContainerChanges(w http.ResponseWriter, r *http.Request) {
+	writeHeaders(w, 200, "changes")
+	body := `[
+          {
+            "Path": "/dev",
+            "Kind": 0
+          },
+          {
+            "Path": "/dev/kmsg",
+            "Kind": 1
+          },
+          {
+            "Path": "/test",
+            "Kind": 1
+          }
+        ]`
+	w.Write([]byte(body))
 }
 
 func getBoolValue(boolString string) bool {
@@ -207,4 +228,8 @@ func handlerGetContainers(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	w.Write([]byte(body))
+}
+
+func handleEvents(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte(eventsResp))
 }

@@ -149,24 +149,26 @@ func (m *Mgr) Run() error {
 	plugins.SetEnabledPlugins(enabledPlugins)
 
 	// custom event to signal startup
-	evt := &dockerclient.Event{
-		Id:     "",
-		Status: "interlock-start",
-		From:   "interlock",
-		Time:   time.Now().UnixNano(),
-	}
-	plugins.DispatchEvent(m.config, m.client, evt, eventsErrChan)
-
+	m.Signal("interlock-start", nil)
 	return nil
 }
 
 func (m *Mgr) Stop() error {
 	// custom event to signal shutdown
-	evt := &dockerclient.Event{
-		Id:     "",
-		Status: "interlock-stop",
-		From:   "interlock",
-		Time:   time.Now().UnixNano(),
+	m.Signal("interlock-stop", nil)
+	return nil
+}
+
+// Signal fires an event of the specified type
+func (m *Mgr) Signal(action string, params map[string]string) error {
+	evt := &interlock.InterlockEvent{
+		Event: &dockerclient.Event{
+			Id:     "",
+			Status: action,
+			From:   "interlock",
+			Time:   time.Now().UnixNano(),
+		},
+		Parameters: params,
 	}
 	plugins.DispatchEvent(m.config, m.client, evt, eventsErrChan)
 	return nil

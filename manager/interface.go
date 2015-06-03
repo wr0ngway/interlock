@@ -12,4 +12,5 @@ type Manager interface {
 	Plugins() map[string]*plugins.RegisteredPlugin
 	Config() *interlock.Config
 	Client() *dockerclient.DockerClient
+	Signal(action string, params map[string]string) error
 }

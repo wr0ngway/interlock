@@ -104,7 +104,7 @@ func loadPluginConfig() (*PluginConfig, error) {
 	cfg := &PluginConfig{
 		ProxyConfigPath:             filepath.Join(wd, "proxy.conf"),
 		ProxyBackendOverrideAddress: "",
-		Port:           8080,
+		Port:           80,
 		PidPath:        filepath.Join(wd, "proxy.pid"),
 		MaxConn:        2048,
 		ConnectTimeout: 5000,
@@ -113,7 +113,7 @@ func loadPluginConfig() (*PluginConfig, error) {
 		StatsUser:      "stats",
 		StatsPassword:  "interlock",
 		SSLCert:        "",
-		SSLPort:        8443,
+		SSLPort:        443,
 		SSLOpts:        "",
 	}
 
@@ -256,7 +256,7 @@ func (p HaproxyPlugin) handleReload() error {
 	return nil
 }
 
-func (p HaproxyPlugin) handleUpdate(event *dockerclient.Event) error {
+func (p HaproxyPlugin) handleUpdate(event *interlock.InterlockEvent) error {
 	logMessage(log.DebugLevel, "update request received")
 
 	defer p.handleReload()
@@ -268,7 +268,7 @@ func (p HaproxyPlugin) handleUpdate(event *dockerclient.Event) error {
 	return nil
 }
 
-func (p HaproxyPlugin) HandleEvent(event *dockerclient.Event) error {
+func (p HaproxyPlugin) HandleEvent(event *interlock.InterlockEvent) error {
 	switch event.Status {
 	case "start", "interlock-start":
 		jobs = jobs + 1
@@ -280,6 +280,10 @@ func (p HaproxyPlugin) HandleEvent(event *dockerclient.Event) error {
 		// delay to make sure container is removed
 		time.Sleep(250 * time.Millisecond)
 		if err := p.handleUpdate(event); err != nil {
+			return err
+		}
+	case "haproxy-reload":
+		if err := p.reload(); err != nil {
 			return err
 		}
 	case "interlock-stop":
@@ -508,7 +512,7 @@ func (p HaproxyPlugin) GenerateProxyConfig() (*ProxyConfig, error) {
 	return cfg, nil
 }
 
-func (p HaproxyPlugin) updateConfig(e *dockerclient.Event) error {
+func (p HaproxyPlugin) updateConfig(e *interlock.InterlockEvent) error {
 	cfg, err := p.GenerateProxyConfig()
 	if err != nil {
 		return err
