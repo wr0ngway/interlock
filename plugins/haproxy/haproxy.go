@@ -428,43 +428,66 @@ func (p HaproxyPlugin) GenerateProxyConfig() (*ProxyConfig, error) {
 			hostSSLOnly[domain] = true
 		}
 
-		//host := cInfo.NetworkSettings.IpAddress
-		ports := cInfo.NetworkSettings.Ports
-		if len(ports) == 0 {
-			logMessage(log.WarnLevel, fmt.Sprintf("%s: no ports exposed", cntId))
-			continue
-		}
-
 		var portDef dockerclient.PortBinding
 
-		for _, v := range ports {
-			if len(v) > 0 {
-				portDef = dockerclient.PortBinding{
-					HostIp:   v[0].HostIp,
-					HostPort: v[0].HostPort,
+		//host := cInfo.NetworkSettings.IpAddress
+
+		// HACK: look for multi-host networking
+		internalNetworking := false
+		addr := ""
+		if v, ok := cInfo.Config.Labels["com.interlock.networkmode"]; ok {
+			if v == "internal" {
+				internalNetworking = true
+				log.Debugf("using internal network mode")
+				p, ok := cInfo.Config.Labels["com.interlock.port"]
+				if !ok {
+					return nil, fmt.Errorf("unable to find port for internal network mode")
 				}
-				break
+
+				portDef = dockerclient.PortBinding{
+					HostIp:   cInfo.NetworkSettings.IpAddress,
+					HostPort: p,
+				}
+
+				addr = fmt.Sprintf("%s:%s", portDef.HostIp, portDef.HostPort)
 			}
 		}
 
-		if p.pluginConfig.ProxyBackendOverrideAddress != "" {
-			portDef.HostIp = p.pluginConfig.ProxyBackendOverrideAddress
-		}
+		if !internalNetworking {
+			ports := cInfo.NetworkSettings.Ports
+			if len(ports) == 0 {
+				logMessage(log.WarnLevel, fmt.Sprintf("%s: no ports exposed", cntId))
+				continue
+			}
 
-		addr := fmt.Sprintf("%s:%s", portDef.HostIp, portDef.HostPort)
-
-		if interlockData.Port != 0 {
-			interlockPort := fmt.Sprintf("%d", interlockData.Port)
-			for k, v := range ports {
-				parts := strings.Split(k, "/")
-				if parts[0] == interlockPort {
-					port := v[0]
-					logMessage(log.DebugLevel,
-						fmt.Sprintf("%s: found specified port %s exposed as %s", domain, interlockPort, port.HostPort))
-					addr = fmt.Sprintf("%s:%s", portDef.HostIp, port.HostPort)
+			for _, v := range ports {
+				if len(v) > 0 {
+					portDef = dockerclient.PortBinding{
+						HostIp:   v[0].HostIp,
+						HostPort: v[0].HostPort,
+					}
 					break
 				}
 			}
+
+			if p.pluginConfig.ProxyBackendOverrideAddress != "" {
+				portDef.HostIp = p.pluginConfig.ProxyBackendOverrideAddress
+			}
+
+			if interlockData.Port != 0 {
+				interlockPort := fmt.Sprintf("%d", interlockData.Port)
+				for k, v := range ports {
+					parts := strings.Split(k, "/")
+					if parts[0] == interlockPort {
+						port := v[0]
+						logMessage(log.DebugLevel,
+							fmt.Sprintf("%s: found specified port %s exposed as %s", domain, interlockPort, port.HostPort))
+						addr = fmt.Sprintf("%s:%s", portDef.HostIp, port.HostPort)
+						break
+					}
+				}
+			}
+
 		}
 
 		container_name := cInfo.Name[1:]

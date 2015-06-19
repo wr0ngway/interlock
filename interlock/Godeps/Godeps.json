@@ -1,6 +1,6 @@
 {
 	"ImportPath": "github.com/ehazlett/interlock/interlock",
-	"GoVersion": "go1.4.1",
+	"GoVersion": "go1.4.2",
 	"Deps": [
 		{
 			"ImportPath": "github.com/Sirupsen/logrus",
@@ -14,7 +14,7 @@
 		},
 		{
 			"ImportPath": "github.com/samalba/dockerclient",
-			"Rev": "e1a9e2f8d38f462752ef1e55720dc57b1e42d20e"
+			"Rev": "1cc97a0c89ff8787a3dbe70a2ee049cf40b41338"
 		}
 	]
 }
