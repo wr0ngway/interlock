@@ -1,6 +1,10 @@
 FROM debian:jessie
 RUN apt-get update
-RUN apt-get install -y haproxy nginx-full ca-certificates --no-install-recommends
+RUN apt-get install -y --no-install-recommends \
+    haproxy \
+    nginx-full \
+    dnsmasq \
+    ca-certificates
 ADD interlock /usr/local/bin/interlock
-EXPOSE 8080 8443 80 443
+EXPOSE 53/udp 80 443
 ENTRYPOINT ["/usr/local/bin/interlock"]
